@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Демо МЦКО — копия</title>
+<style>
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:#f6f7fb;margin:0;color:#111}
+  header{background:#0b5ed7;color:#fff;padding:18px 20px;display:flex;align-items:center;justify-content:space-between}
+  .container{max-width:980px;margin:28px auto;padding:0 16px}
+  .card{background:white;border-radius:12px;box-shadow:0 6px 20px rgba(12,20,60,0.06);padding:20px;margin-bottom:18px}
+  h1{margin:0;font-size:20px}
+  .tests{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .test-btn{padding:12px 16px;border-radius:10px;border:1px solid #e6eefc;background:linear-gradient(180deg,#ffffff,#f3f8ff);cursor:pointer}
+  .q{margin-bottom:14px}
+  .choices label{display:block;padding:8px;border-radius:8px;border:1px solid #eef3ff;margin:6px 0;cursor:pointer}
+  .toolbar{display:flex;gap:8px;align-items:center}
+  .small{font-size:13px;color:#445}
+  .admin{position:fixed;right:14px;top:68px;background:#fff;border-radius:10px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,0.08);width:320px}
+  .admin h3{margin:0 0 8px 0;font-size:15px}
+  input[type="text"], input[type="number"], textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #eef3ff;margin-top:6px}
+  .result{font-weight:700;font-size:18px}
+  .correct{color:green}.wrong{color:#c00}
+  footer{padding:18px;text-align:center;color:#666;font-size:13px}
+  .btn{background:#0b5ed7;color:#fff;padding:10px 12px;border-radius:8px;border:none;cursor:pointer}
+  .btn.secondary{background:#eef3ff;color:#0b5ed7}
+  pre{background:#0b1220;color:#fff;padding:12px;border-radius:10px;overflow:auto}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Демо МЦКО — тренировка</h1>
+    <div class="small">Копия интерфейса + настроечная система оценивания</div>
+  </div>
+  <div class="toolbar">
+    <button id="open-admin" class="btn secondary">Админ</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card">
+    <div><strong>Выберите тест:</strong></div>
+    <div class="tests" id="test-list"></div>
+  </div>
+
+  <div id="test-area"></div>
+
+  <div id="result-area"></div>
+</div>
+
+<!-- Админ-панель -->
+<div id="admin" class="admin" style="display:none;">
+  <h3>Параметры оценивания</h3>
+  <div class="small">Задайте максимальные первичные баллы для каждого задания и пороги для 2-5.</div>
+
+  <div style="margin-top:8px;">
+    <label>Порог для оценки 5 (% от макс): <input id="thr-5" type="number" min="0" max="100" value="80"></label>
+    <label>Порог для оценки 4 (%): <input id="thr-4" type="number" min="0" max="100" value="60"></label>
+    <label>Порог для оценки 3 (%): <input id="thr-3" type="number" min="0" max="100" value="40"></label>
+    <label>Порог для оценки 2 (%): <input id="thr-2" type="number" min="0" max="100" value="0"></label>
+  </div>
+
+  <hr>
+
+  <div>
+    <strong>Список заданий (редактируемые веса)</strong>
+    <div id="weights-list" style="margin-top:8px"></div>
+  </div>
+
+  <div style="margin-top:10px;text-align:right">
+    <button id="save-settings" class="btn">Сохранить</button>
+    <button id="close-admin" class="btn secondary">Закрыть</button>
+  </div>
+</div>
+
+<footer>Эта страница — демонстрационная копия тестовой системы МЦКО (структура и типы заданий заимствованы из демоверсий). Источник демо-тестов: demo.mcko.ru. 1</footer>
+
+<script>
+/* ========== Простая модель тестов (пример) ========== 
+   Типы: 'mcq' (множественный выбор; одна или несколько правильных), 
+          'short' (краткий ответ), 'essay' (развёрнутый текст — ручная проверка / тривиальная автоматическая проверка)
+   Каждый вопрос имеет maxPoints (макс. первичных баллов).
+   В админке можно менять пороги перевода сумм в оценку (в процентах).
+*/
+
+// Пример тестов — можно расширять/заменять на реальные демоверсии
+const tests = [
+  {
+    id:'rus-7-demo',
+    title:'Русский язык — 7 класс (Демо)',
+    durationMin:60,
+    questions:[
+      { id:'q1', type:'mcq', text:'Выберите верное написание слова?', choices:['Превосходно','Превосходноъ','Превосходноo'], correct:[0], maxPoints:1},
+      { id:'q2', type:'short', text:'Укажите часть речи слова "бегать".', correctAnswerRegex:'^глагол$', maxPoints:2},
+      { id:'q3', type:'mcq', text:'Какая из форм является причастием?', choices:['читающий','читать','читал'], correct:[0], maxPoints:1},
+      { id:'q4', type:'essay', text:'Кратко объясните, почему соблюдение орфографии важно в официальных документах (макс 4 балла).', maxPoints:4}
+    ]
+  },
+
+  {
+    id:'math-7-demo',
+    title:'Математика — 7 класс (Демо)',
+    durationMin:45,
+    questions:[
+      { id:'m1', type:'short', text:'Вычислите: 7 * 8 = ?', correctAnswerRegex:'^56$', maxPoints:1},
+      { id:'m2', type:'mcq', text:'Укажите наибольшее число', choices:['3','8','5','7'], correct:[1], maxPoints:1},
+      { id:'m3', type:'short', text:'Решите: x+3=10, x = ?', correctAnswerRegex:'^7$', maxPoints:2}
+    ]
+  }
+];
+
+// Загрузка тестов в UI
+const testListEl = document.getElementById('test-list');
+tests.forEach(t=>{
+  const b = document.createElement('button');
+  b.className='test-btn';
+  b.textContent = `${t.title} · ${t.questions.length} заданий`;
+  b.onclick = ()=>openTest(t.id);
+  testListEl.appendChild(b);
+});
+
+// Настройки переводов (по умолчанию)
+let thresholds = {
+  '5': 80,
+  '4': 60,
+  '3': 40,
+  '2': 0
+};
+
+// Состояние текущего теста
+let current = null;
+let answers = {}; // {qId: userAnswer}
+
+// Открытие теста
+function openTest(testId){
+  const t = tests.find(x=>x.id===testId);
+  if(!t) return;
+  current = t;
+  answers = {};
+  renderTest();
+}
+
+function renderTest(){
+  const area = document.getElementById('test-area');
+  area.innerHTML = '';
+  if(!current) { area.innerHTML='<div class="card">Выберите тест.</div>'; return; }
+
+  const card = document.createElement('div'); card.className='card';
+  const title = document.createElement('h2'); title.textContent = current.title;
+  const info = document.createElement('div'); info.className='small'; info.textContent = `Длительность: ${current.durationMin} мин. — ${current.questions.length} заданий`;
+  card.appendChild(title); card.appendChild(info);
+  card.appendChild(document.createElement('hr'));
+
+  current.questions.forEach((q, idx)=>{
+    const qdiv = document.createElement('div'); qdiv.className='q';
+    qdiv.innerHTML = `<div><strong>Задание ${idx+1}.</strong> ${q.text} <span class="small">[${q.type}]</span></div>`;
+
+    if(q.type==='mcq'){
+      const choices = document.createElement('div'); choices.className='choices';
+      q.choices.forEach((ch, ci)=>{
+        const id = `${q.id}_c_${ci}`;
+        const lab = document.createElement('label');
+        lab.innerHTML = `<input type="radio" name="${q.id}" value="${ci}" /> ${ch}`;
+        choices.appendChild(lab);
+      });
+      qdiv.appendChild(choices);
+    } else if(q.type==='short'){
+      const inp = document.createElement('input');
+      inp.type='text'; inp.placeholder='Ответ';
+      inp.oninput = ()=>answers[q.id]=inp.value.trim();
+      qdiv.appendChild(inp);
+    } else if(q.type==='essay'){
+      const ta = document.createElement('textarea');
+      ta.rows=5; ta.placeholder='Развёрнутый ответ (будет оценён вручную или автоматически по простым правилам)';
+      ta.oninput = ()=>answers[q.id]=ta.value.trim();
+      qdiv.appendChild(ta);
+    }
+
+    card.appendChild(qdiv);
+  });
+
+  const submit = document.createElement('div'); submit.style.textAlign='right';
+  submit.innerHTML = `<button class="btn" id="submit-test">Отправить и оценить</button>`;
+  card.appendChild(submit);
+  area.appendChild(card);
+
+  // слушатели для MCQ
+  current.questions.forEach(q=>{
+    if(q.type==='mcq'){
+      const radios = document.getElementsByName(q.id);
+      radios.forEach(r=>{
+        r.onchange = ()=>{
+          answers[q.id]=parseInt(r.value,10);
+        };
+      });
+    }
+  });
+
+  document.getElementById('submit-test').onclick = gradeTest;
+}
+
+// Градация: подсчёт первичных и перевод в 2-5
+function gradeTest(){
+  if(!current) return;
+  let totalMax = 0, totalGot = 0;
+  const feedback = [];
+
+  current.questions.forEach(q=>{
+    totalMax += q.maxPoints || 0;
+    let got = 0;
+    const user = answers[q.id];
+
+    if(q.type==='mcq'){
+      // если правильный индекс совпадает — даём весь макс
+      if(Array.isArray(q.correct)){
+        // если правильных несколько, допускаем только 1 правильный в этой демоверсии — простая логика
+        if(typeof user === 'number' && q.correct.includes(user)) got = q.maxPoints;
+      }
+    } else if(q.type==='short'){
+      if(typeof user === 'string' && user.length>0){
+        const re = new RegExp(q.correctAnswerRegex,'i');
+        if(re.test(user)) got = q.maxPoints;
+        else {
+          // можно дать частичную оценку: проверим цифры внутри (для числовых ответов)
+          const digitsQ = (q.correctAnswerRegex||'').match(/\\d+/);
+          const digitsU = user.match(/\\d+/);
+          if(digitsQ && digitsU && digitsQ[0]===digitsU[0]) got = Math.min(1, q.maxPoints);
+        }
+      }
+    } else if(q.type==='essay'){
+      // очень простая автооценка: длина текста
+      if(typeof user === 'string' && user.trim().length>0){
+        const len = user.trim().split(/\s+/).length;
+        if(len>60) got = q.maxPoints;
+        else if(len>30) got = Math.ceil(q.maxPoints*0.75);
+        else if(len>10) got = Math.ceil(q.maxPoints*0.4);
+        else got = 0;
+      } else got = 0;
+    }
+
+    totalGot += got;
+    feedback.push({id:q.id, text:q.text, got, max:q.maxPoints});
+  });
+
+  // перевод в проценты, затем в оценку 2-5 с порогами
+  const pct = totalMax>0 ? Math.round(100 * totalGot / totalMax) : 0;
+  let mark = 2;
+  if(pct >= thresholds['5']) mark = 5;
+  else if(pct >= thresholds['4']) mark = 4;
+  else if(pct >= thresholds['3']) mark = 3;
+  else mark = 2;
+
+  // Показ результата
+  const ra = document.getElementById('result-area');
+  ra.innerHTML = '';
+  const rcard = document.createElement('div'); rcard.className='card';
+  rcard.innerHTML = `<div class="result">Результат: ${totalGot} / ${totalMax} первичных баллов — ${pct}% — Оценка: <span style="color:#0b5ed7">${mark}</span></div><hr>`;
+  const list = document.createElement('div');
+  feedback.forEach(f=>{
+    const el = document.createElement('div');
+    el.innerHTML = `<div><strong>Задание:</strong> ${f.text}</div>
+                    <div>Баллы: <span class="${f.got===f.max?'correct':'wrong'}">${f.got}</span> / ${f.max}</div><hr>`;
+    list.appendChild(el);
+  });
+  rcard.appendChild(list);
+  ra.appendChild(rcard);
+}
+
+// Админка — показать/скрыть, редактировать веса и пороги
+document.getElementById('open-admin').onclick = ()=>{ document.getElementById('admin').style.display='block'; fillAdmin(); };
+document.getElementById('close-admin').onclick = ()=>{ document.getElementById('admin').style.display='none'; };
+document.getElementById('save-settings').onclick = ()=>{
+  thresholds['5'] = Number(document.getElementById('thr-5').value);
+  thresholds['4'] = Number(document.getElementById('thr-4').value);
+  thresholds['3'] = Number(document.getElementById('thr-3').value);
+  thresholds['2'] = Number(document.getElementById('thr-2').value);
+  // применим веса из полей
+  document.querySelectorAll('.w-input').forEach(inp=>{
+    const qid = inp.dataset.qid;
+    const val = Number(inp.value);
+    tests.forEach(t=> t.questions.forEach(q=> { if(q.id===qid) q.maxPoints = val; }));
+  });
+  alert('Настройки сохранены');
+};
+
+function fillAdmin(){
+  document.getElementById('thr-5').value = thresholds['5'];
+  document.getElementById('thr-4').value = thresholds['4'];
+  document.getElementById('thr-3').value = thresholds['3'];
+  document.getElementById('thr-2').value = thresholds['2'];
+
+  const wl = document.getElementById('weights-list');
+  wl.innerHTML = '';
+  tests.forEach(t=>{
+    const sep = document.createElement('div'); sep.style.marginTop='8px';
+    sep.innerHTML = `<strong>${t.title}</strong>`;
+    wl.appendChild(sep);
+    t.questions.forEach(q=>{
+      const row = document.createElement('div'); row.style.margin='6px 0';
+      row.innerHTML = `<div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1">${q.id} — ${q.text}</div>
+        <div style="width:80px"><input class="w-input" data-qid="${q.id}" type="number" min="0" value="${q.maxPoints}"></div>
+      </div>`;
+      wl.appendChild(row);
+    });
+  });
+}
+
+// Инициализация: показываем пустое состояние
+openTest(tests[0].id);
+
+</script>
+</body>
+</html>
