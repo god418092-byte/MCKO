@@ -2,198 +2,269 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<title>CS Esports Hub PRO</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SkyNet EnderPhone - Поддержка</title>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, getDocs, doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBoYwaeuS4nFw_I3lT0k0NvM2m6-hise-M",
+  authDomain: "to4nonemax-v1.firebaseapp.com",
+  projectId: "to4nonemax-v1",
+  storageBucket: "to4nonemax-v1.firebasestorage.app",
+  messagingSenderId: "476166075039",
+  appId: "1:476166075039:web:7ffda2848460df5df6e8aa"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let isAdmin = false;
+let currentUser = null;
+let myTeam = null;
+
+const ADMIN_EMAIL = "admin@mail.com";
+const ADMIN_PASS = "123456";
+
+// 🔐 AUTH
+window.register = async () => {
+  await createUserWithEmailAndPassword(auth, email.value, pass.value);
+  alert("Аккаунт создан");
+};
+
+window.login = async () => {
+  let res = await signInWithEmailAndPassword(auth, email.value, pass.value);
+  currentUser = res.user;
+
+  if(email.value === ADMIN_EMAIL && pass.value === ADMIN_PASS){
+    isAdmin = true;
+    alert("👑 Админ режим");
+  }
+
+  loadTeams();
+  loadTournaments();
+};
+
+// 🧑‍🤝‍🧑 КОМАНДЫ
+window.createTeam = async () => {
+  let name = team.value;
+
+  await addDoc(collection(db, "teams"), {
+    name,
+    owner: currentUser.uid
+  });
+
+  loadTeams();
+};
+
+window.loadTeams = async () => {
+  let snap = await getDocs(collection(db, "teams"));
+  let html = "";
+  myTeam = null;
+
+  snap.forEach(d=>{
+    let t = d.data();
+
+    if(currentUser && t.owner === currentUser.uid){
+      myTeam = t.name;
+    }
+
+    html += `<div class="card">${t.name}</div>`;
+  });
+
+  teams.innerHTML = html;
+};
+
+// 🏆 ТУРНИРЫ
+window.createTournament = async () => {
+  if(!isAdmin) return alert("Только админ");
+
+  await addDoc(collection(db, "tournaments"), {
+    name: tname.value,
+    game: game.value,
+    teams: []
+  });
+
+  loadTournaments();
+};
+
+window.loadTournaments = async () => {
+  let snap = await getDocs(collection(db, "tournaments"));
+  let html = "";
+
+  snap.forEach(docSnap=>{
+    let t = docSnap.data();
+
+    html += `
+    <div class="card">
+      <b>${t.name}</b><br>
+      ${t.game}<br>
+      <button onclick="joinTournament('${docSnap.id}')">Записаться</button>
+    </div>`;
+  });
+
+  tournaments.innerHTML = html;
+};
+
+// 🔥 ЗАПИСЬ В ТУРНИР
+window.joinTournament = async (id) => {
+  if(!currentUser) return alert("Войди в аккаунт");
+  if(!myTeam) return alert("Сначала создай команду");
+
+  let ref = doc(db, "tournaments", id);
+  let d = await getDoc(ref);
+  let data = d.data();
+
+  if(!data.teams.includes(myTeam)){
+    data.teams.push(myTeam);
+    await setDoc(ref, data);
+    alert("Ты в турнире 🔥");
+  } else {
+    alert("Уже участвуешь");
+  }
+};
+
+// ⚔️ МАТЧИ
+window.createMatch = async () => {
+  if(!isAdmin) return alert("Только админ");
+
+  await addDoc(collection(db, "matches"), {
+    team1: team1.value,
+    team2: team2.value,
+    score1: 0,
+    score2: 0
+  });
+
+  loadMatches();
+};
+
+window.loadMatches = async () => {
+  let snap = await getDocs(collection(db, "matches"));
+  let html = "";
+
+  snap.forEach(doc=>{
+    let m = doc.data();
+
+    html += `
+    <div class="card">
+      ${m.team1} 🆚 ${m.team2}<br>
+      ${m.score1}:${m.score2}
+    </div>`;
+  });
+
+  matches.innerHTML = html;
+};
+
+// 🧠 ВКЛАДКИ
+window.openTab = (id) => {
+  document.querySelectorAll(".tab").forEach(t=>t.style.display="none");
+  document.getElementById(id).style.display="block";
+};
+</script>
 
 <style>
-/* ===== БАЗА ===== */
-body{
-    font-family: Arial, sans-serif;
-    background:#111;
-    color:#f0f0f0;
-    margin:0;
+body {
+  margin:0;
+  font-family:Arial;
+  background:linear-gradient(135deg,#0a0a0a,#111);
+  color:white;
 }
 
-header{
-    background:#1a1a1a;
-    padding:20px;
-    text-align:center;
-    border-bottom:2px solid #ff0000;
+nav {
+  display:flex;
+  justify-content:space-around;
+  background:#111;
+  padding:15px;
 }
 
-header h1{
-    margin:0;
-    color:#ff0000;
-    text-shadow:0 0 8px #ff0000;
+nav button {
+  background:none;
+  border:none;
+  color:#00ffc3;
+  font-size:16px;
+  cursor:pointer;
 }
 
-nav{
-    background:#222;
-    padding:12px;
-    text-align:center;
+.card {
+  background:rgba(255,255,255,0.05);
+  backdrop-filter:blur(10px);
+  margin:10px;
+  padding:15px;
+  border-radius:12px;
+  box-shadow:0 0 15px #00ffc355;
 }
 
-nav a{
-    color:#f0f0f0;
-    margin:0 15px;
-    text-decoration:none;
-    font-weight:bold;
-    transition:.25s;
+input,select,button {
+  padding:10px;
+  margin:5px;
+  border-radius:6px;
+  border:none;
 }
 
-nav a:hover{
-    color:#ff0000;
-    transform:scale(1.1);
+button {
+  background:#00ffc3;
+  cursor:pointer;
 }
 
-main{
-    padding:30px;
-    max-width:800px;
-    margin:auto;
-}
-
-section{
-    background:#1b1b1b;
-    padding:20px;
-    border-radius:12px;
-    margin-bottom:30px;
-    opacity:0;
-    transform:translateY(30px);
-    transition:opacity .6s, transform .6s;
-}
-
-section.show{
-    opacity:1;
-    transform:translateY(0);
-}
-
-h2{
-    color:#ff4444;
-}
-
-form{
-    display:flex;
-    flex-direction:column;
-}
-
-input,textarea{
-    margin-bottom:12px;
-    padding:12px;
-    border:none;
-    border-radius:8px;
-    background:#2a2a2a;
-    color:#fff;
-    transition:.2s;
-}
-
-input:focus,textarea:focus{
-    outline:none;
-    transform:scale(1.02);
-}
-
-button{
-    padding:12px;
-    background:#ff0000;
-    color:#fff;
-    border:none;
-    border-radius:8px;
-    cursor:pointer;
-    font-weight:bold;
-    transition:transform .15s;
-}
-
-button:hover{
-    transform:translateY(-3px);
-}
-
-button:active{
-    transform:scale(.97);
-}
-
-footer{
-    background:#1a1a1a;
-    padding:20px;
-    text-align:center;
-    border-top:2px solid #ff0000;
-    margin-top:20px;
+.tab {
+  display:none;
+  padding:15px;
 }
 </style>
 </head>
 
 <body>
 
-<header>
-    <h1>SkyNet EnderPhone</h1>
-    <p>Поддержка SkyNet</p>
-</header>
-
 <nav>
-    <a href="#about">О сервисе</a>
-    <a href="#faq">FAQ</a>
-    <a href="#contact">Обратная связь</a>
+<button onclick="openTab('home')">Главная</button>
+<button onclick="openTab('tour')">Турниры</button>
+<button onclick="openTab('match')">Матчи</button>
+<button onclick="openTab('admin')">👑 Админ</button>
 </nav>
 
-<main>
-<section id="about">
-    <h2>О SkyNet EnderPhone</h2>
-    <p>SkyNet EnderPhone — сервис поддержки пользователей SkyNet. Помощь с обновлениями, настройкой и устранением неполадок.</p>
-</section>
+<div id="home" class="tab" style="display:block">
+<h2>🔐 Вход</h2>
+<input id="email">
+<input id="pass" type="password">
+<button onclick="register()">Регистрация</button>
+<button onclick="login()">Вход</button>
 
-<section id="faq">
-    <h2>FAQ</h2>
-    <ul>
-        <li><strong>Как обновить Robot?</strong> — Нажмите "Update firmware".</li>
-        <li><strong>Как обратиться в поддержку?</strong> — Используйте форму ниже.</li>
-    </ul>
-</section>
+<h2>🧑‍🤝‍🧑 Команда</h2>
+<input id="team">
+<button onclick="createTeam()">Создать</button>
+<div id="teams"></div>
+</div>
 
-<section id="contact">
-    <h2>Обратная связь</h2>
-    <form action="https://formspree.io/f/xzdalgpy" method="POST">
-        <input type="text" name="name" placeholder="Ваше имя" required>
-        <input type="email" name="email" placeholder="Ваш email" required>
-        <textarea name="message" rows="6" placeholder="Ваше сообщение" required></textarea>
-        <button type="submit">Отправить</button>
-    </form>
-</section>
-</main>
+<div id="tour" class="tab">
+<h2>🏆 Турниры</h2>
+<div id="tournaments"></div>
+</div>
 
-<footer>
-    © 2026 SkyNet EnderPhone
-</footer>
+<div id="match" class="tab">
+<h2>⚔️ Матчи</h2>
+<div id="matches"></div>
+</div>
 
-<script>
-/* ===== IntersectionObserver для плавного появления секций ===== */
-const observer = new IntersectionObserver(entries=>{
-    entries.forEach(e=>{
-        if(e.isIntersecting) e.target.classList.add("show");
-    });
-});
-document.querySelectorAll("section").forEach(s=>observer.observe(s));
+<div id="admin" class="tab">
+<h2>👑 Админ-панель</h2>
 
-/* ===== Плавный скролл с easing ===== */
-document.querySelectorAll('nav a').forEach(link=>{
-    link.addEventListener('click', e=>{
-        e.preventDefault();
-        const target = document.querySelector(link.getAttribute('href'));
-        const start = window.scrollY;
-        const end = target.offsetTop - 10;
-        const duration = 700;
-        let startTime = null;
-        function ease(t){
-            return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
-        }
-        function animation(time){
-            if(!startTime) startTime = time;
-            const progress = (time-startTime)/duration;
-            const amount = ease(Math.min(progress,1));
-            window.scrollTo(0,start+(end-start)*amount);
-            if(progress < 1) requestAnimationFrame(animation);
-        }
-        requestAnimationFrame(animation);
-    });
-});
-</script>
+<input id="tname" placeholder="Название турнира">
+<select id="game">
+<option>CS 1.6</option>
+<option>Condition Zero</option>
+</select>
+<button onclick="createTournament()">Создать турнир</button>
+
+<br><br>
+
+<input id="team1" placeholder="Team 1">
+<input id="team2" placeholder="Team 2">
+<button onclick="createMatch()">Создать матч</button>
+</div>
 
 </body>
 </html>
